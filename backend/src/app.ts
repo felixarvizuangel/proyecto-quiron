@@ -1,11 +1,15 @@
 import express from 'express';
 import { pool } from './db';
+import { authRouter } from './auth/router';
+import { estudiantesRouter } from './estudiantes/router';
 
 export const app = express();
 
 app.use(express.json());
-import { authRouter } from './auth/router';
+
 app.use('/auth', authRouter);
+app.use('/estudiantes', estudiantesRouter);
+
 // Ruta de salud: confirma que la API vive y que llega a la base de datos
 app.get('/salud', async (_req, res) => {
   try {
