@@ -19,8 +19,9 @@ La idea central: la app no solo muestra números. A futuro le dirá a la familia
 8. [API](#api)
 9. [Roadmap](#roadmap)
 10. [Decisiones de diseño](#decisiones-de-diseño)
-11. [Estado actual](#estado-actual)
-12. [Autor](#autor)
+11. [Consideraciones de escalabilidad](#consideraciones-de-escalabilidad)
+12. [Estado actual](#estado-actual)
+13. [Autor](#autor)
 
 ---
 
@@ -175,6 +176,24 @@ Rutas principales, agrupadas por recurso. Todas menos `/salud` y `/auth/*` requi
 - **Baja lógica:** dar de baja desactiva al usuario (`activo`), no lo borra, para conservar el historial de calificaciones y asistencia.
 - **Permisos verificados en el servidor:** cada ruta de escritura vuelve a consultar la base de datos para confirmar que el maestro autenticado de verdad tiene esa asignación, en vez de confiar solo en lo que dice el token.
 - **Contraseñas cifradas con argon2:** nunca se guardan en texto plano, ni siquiera el Director puede leerlas.
+
+## Consideraciones de escalabilidad
+El diseño actual está pensado para una sola escuela con cientos de usuarios, y ya resuelve los puntos que más importan a esa escala:
+
+- **Base de datos normalizada**, sin datos repetidos, con llaves foráneas e índices en las consultas más usadas (asistencia por fecha, avisos por destino).
+- **Backend, panel web y app móvil separados**, comunicados solo por la API. Se pueden escalar por separado.
+- **Pool de conexiones a PostgreSQL** (`pg.Pool`), en vez de abrir una conexión nueva por cada petición.
+- **Autenticación sin estado (JWT)**: no depende de sesiones guardadas en memoria, así que puede correr en más de una instancia de la API al mismo tiempo.
+
+Puntos que quedan fuera del alcance del MVP, pero con una solución identificada:
+
+| Límite actual | Cuándo importa | Cómo se resolvería |
+|---|---|---|
+| Un solo servidor de PostgreSQL, sin réplicas | Miles de usuarios simultáneos | Réplicas de lectura o un servicio gestionado (RDS, Cloud SQL) |
+| Sin caché | Consultas muy frecuentes sobre datos que casi no cambian | Redis para catálogos como materias o grupos |
+| Corre en una sola computadora | Uso en producción real | Desplegar en un servicio con más de una instancia (Railway, Render, un VPS) |
+| Pensado para una sola escuela | Vender el sistema a varias instituciones | Agregar `id_escuela` a las tablas y a los permisos |
+| Avisos masivos enviados en la misma petición | Un aviso a cientos de padres a la vez | Cola de trabajo (por ejemplo BullMQ) para las notificaciones push |
 
 ## Estado actual
 Backend completo y probado de extremo a extremo: autenticación con JWT, roles verificados en el servidor, y las nueve áreas funcionales del MVP (estudiantes, maestros, materias, grupos, asignaciones, asistencia, calificaciones y avisos). En construcción: panel web (React) y app móvil para padres (Flutter).
