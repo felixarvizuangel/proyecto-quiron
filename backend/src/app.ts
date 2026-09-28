@@ -8,6 +8,7 @@ import { gruposRouter } from './grupos/router';
 import { asignacionesRouter } from './asignaciones/router';
 import { asistenciaRouter } from './asistencia/router';
 import { calificacionesRouter } from './calificaciones/router';
+import { avisosRouter } from './avisos/router';
 
 export const app = express();
 
@@ -21,6 +22,7 @@ app.use('/grupos', gruposRouter);
 app.use('/asignaciones', asignacionesRouter);
 app.use('/asistencia', asistenciaRouter);
 app.use('/calificaciones', calificacionesRouter);
+app.use('/avisos', avisosRouter);
 
 // Ruta de salud: confirma que la API vive y que llega a la base de datos
 app.get('/salud', async (_req, res) => {
