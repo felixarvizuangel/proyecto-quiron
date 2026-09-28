@@ -6,6 +6,9 @@ import { maestrosRouter } from './maestros/router';
 import { materiasRouter } from './materias/router';
 import { gruposRouter } from './grupos/router';
 import { asignacionesRouter } from './asignaciones/router';
+import { asistenciaRouter } from './asistencia/router';
+import { calificacionesRouter } from './calificaciones/router';
+
 export const app = express();
 
 app.use(express.json());
@@ -16,6 +19,9 @@ app.use('/maestros', maestrosRouter);
 app.use('/materias', materiasRouter);
 app.use('/grupos', gruposRouter);
 app.use('/asignaciones', asignacionesRouter);
+app.use('/asistencia', asistenciaRouter);
+app.use('/calificaciones', calificacionesRouter);
+
 // Ruta de salud: confirma que la API vive y que llega a la base de datos
 app.get('/salud', async (_req, res) => {
   try {
