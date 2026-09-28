@@ -1,7 +1,6 @@
 import path from 'node:path';
 import dotenv from 'dotenv';
 
-// El .env vive en la raíz del proyecto, dos niveles arriba de este archivo
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 function requerida(nombre: string): string {
@@ -14,8 +13,9 @@ function requerida(nombre: string): string {
 
 export const config = {
   port: Number(process.env.PORT ?? 3000),
+  jwtSecret: requerida('JWT_SECRET'),
   db: {
-    host: process.env.DB_HOST ?? 'localhost',
+    host: process.env.DB_HOST ?? '127.0.0.1',
     port: Number(process.env.DB_PORT ?? 5432),
     user: requerida('POSTGRES_USER'),
     password: requerida('POSTGRES_PASSWORD'),
