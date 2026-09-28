@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:18
+    container_name: quiron-db
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - quiron_data:/var/lib/postgresql
+
+volumes:
+  quiron_data:
