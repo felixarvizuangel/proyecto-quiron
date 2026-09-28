@@ -16,10 +16,11 @@ La idea central: la app no solo muestra números. A futuro le dirá a la familia
 5. [Stack tecnológico](#stack-tecnológico)
 6. [Estructura del repositorio](#estructura-del-repositorio)
 7. [Cómo levantar la base de datos](#cómo-levantar-la-base-de-datos)
-8. [Roadmap](#roadmap)
-9. [Decisiones de diseño](#decisiones-de-diseño)
-10. [Estado actual](#estado-actual)
-11. [Autor](#autor)
+8. [API](#api)
+9. [Roadmap](#roadmap)
+10. [Decisiones de diseño](#decisiones-de-diseño)
+11. [Estado actual](#estado-actual)
+12. [Autor](#autor)
 
 ---
 
@@ -37,7 +38,7 @@ En muchas escuelas la información del estudiante (asistencia, calificaciones, a
 | Ver calificaciones y asistencia | Sí (todos) | Sí (solo su grupo) | Solo las propias | Solo las de sus hijos |
 | Comparar entre estudiantes o hijos | No aplica | No aplica | No | No (decisión de producto) |
 
-Los permisos se validan en el servidor, no solo en la interfaz.
+Los permisos se validan en el servidor, no solo en la interfaz: cada ruta de escritura confirma en la base de datos que el maestro autenticado de verdad imparte esa materia a ese grupo antes de guardar cualquier cosa.
 
 ## Funciones principales
 - **Asistencia por materia:** presente, ausente o retardo, con justificación opcional.
@@ -75,7 +76,9 @@ El esquema completo está en [`backend/db/schema.sql`](backend/db/schema.sql).
 | API | Node.js 24 LTS, TypeScript, Express |
 | Base de datos | PostgreSQL |
 | Contenedores | Docker |
-| Autenticación y permisos | JWT y control de roles propios (sin servicios externos) |
+| Autenticación | JWT + argon2 para el cifrado de contraseñas |
+| Validación de datos | Zod |
+| Autorización | Control de roles propio, verificado en cada ruta |
 | Panel web (Director y Maestro) | React, Vite, Tailwind CSS |
 | App móvil (Padres) | Flutter |
 | Notificaciones push | Firebase Cloud Messaging |
@@ -84,12 +87,22 @@ El esquema completo está en [`backend/db/schema.sql`](backend/db/schema.sql).
 ```
 proyecto-quiron/
 ├── backend/
-│   └── db/schema.sql   Esquema de la base de datos
-├── web/                Panel de Director y Maestro (React)
-├── mobile/             App para padres (Flutter)
-├── docs/               Diagrama ER y documentación
-├── docker-compose.yml  PostgreSQL en Docker
-├── .env.example        Variables de entorno de ejemplo
+│   ├── db/schema.sql        Esquema de la base de datos
+│   └── src/
+│       ├── auth/            Registro, login, JWT y middleware de permisos
+│       ├── estudiantes/     Alta de estudiantes (solo Director)
+│       ├── maestros/        Alta de maestros (solo Director)
+│       ├── materias/        Catálogo de materias
+│       ├── grupos/          Catálogo de grupos
+│       ├── asignaciones/    Qué maestro da qué materia a qué grupo
+│       ├── asistencia/      Registro y consulta de asistencia
+│       ├── calificaciones/  Registro y consulta de calificaciones
+│       └── avisos/          Avisos generales y por grupo
+├── web/                     Panel de Director y Maestro (React)
+├── mobile/                  App para padres (Flutter)
+├── docs/                    Diagrama ER y documentación
+├── docker-compose.yml       PostgreSQL en Docker
+├── .env.example             Variables de entorno de ejemplo
 └── README.md
 ```
 
@@ -109,13 +122,45 @@ Requisitos: Docker Desktop.
 ```
    docker exec -it quiron-db psql -U quiron_admin -d quiron -c "\dt"
 ```
+5. Instala dependencias y enciende la API:
+```
+   cd backend
+   npm install
+   npm run dev
+```
+6. Prueba que la API responde y llega a la base:
+```
+   http://localhost:3000/salud
+```
+
+## API
+Rutas principales, agrupadas por recurso. Todas menos `/salud` y `/auth/*` requieren un token JWT en el header `Authorization: Bearer <token>`.
+
+| Método | Ruta | Quién puede | Qué hace |
+|---|---|---|---|
+| POST | `/auth/registro` | Cualquiera | Crea un usuario (correo, contraseña, rol) |
+| POST | `/auth/login` | Cualquiera | Devuelve un token JWT |
+| POST | `/estudiantes` | Director | Da de alta un estudiante |
+| POST | `/maestros` | Director | Da de alta un maestro |
+| GET | `/maestros`, `/materias`, `/grupos` | Cualquier autenticado | Consulta catálogos |
+| POST | `/materias`, `/grupos` | Director | Crea materias o grupos |
+| POST | `/asignaciones` | Director | Asigna maestro + materia + grupo |
+| GET | `/asignaciones/mias` | Maestro | Sus propias asignaciones |
+| POST | `/asistencia` | Maestro | Registra asistencia (solo en lo que le toca) |
+| GET | `/asistencia/estudiante/:id` | Estudiante propio, su padre, Director, maestro | Consulta asistencia |
+| POST | `/calificaciones` | Maestro | Registra calificación (solo en lo que le toca) |
+| GET | `/calificaciones/estudiante/:id` | Estudiante propio, su padre, Director, maestro | Consulta calificaciones, con aprobado/reprobado calculado |
+| POST | `/avisos/general` | Director | Aviso para toda la escuela |
+| POST | `/avisos/grupo` | Maestro | Aviso solo para su grupo y materia |
+| GET | `/avisos/estudiante/:id` | Estudiante propio, su padre | Avisos generales + los de sus materias |
 
 ## Roadmap
 - [x] Diseño de la base de datos (11 tablas) y diagrama ER
 - [x] Definición de roles y matriz de permisos
 - [x] Repositorio y estructura inicial
 - [x] Base de datos en PostgreSQL con Docker (11 tablas)
-- [ ] **Fase 1 (MVP):** API con autenticación y roles, CRUD de estudiantes y maestros, asistencia, calificaciones, avisos, panel web y app móvil para padres
+- [x] **Fase 1 (MVP) — Backend:** API con autenticación, roles, estudiantes, maestros, materias, grupos, asignaciones, asistencia, calificaciones y avisos
+- [ ] **Fase 1 (MVP) — Frontend:** panel web (Director y Maestro) y app móvil (Padres)
 - [ ] **Fase 1.5:** modo sin conexión (sincronización al volver el internet)
 - [ ] **Fase 2:** orientación vocacional con rol de psicólogo y validación profesional de las sugerencias de carrera
 - [ ] **Fase 3:** estadísticas avanzadas para el Director y notificaciones por nivel de urgencia
@@ -128,9 +173,11 @@ Requisitos: Docker Desktop.
 - **API y permisos propios:** control total de los datos, sin depender de servicios de terceros para lo esencial.
 - **Datos de acceso centralizados:** una sola tabla `Usuarios` (correo, contraseña cifrada, rol, activo) en vez de repetirlos en cada tabla de personas.
 - **Baja lógica:** dar de baja desactiva al usuario (`activo`), no lo borra, para conservar el historial de calificaciones y asistencia.
+- **Permisos verificados en el servidor:** cada ruta de escritura vuelve a consultar la base de datos para confirmar que el maestro autenticado de verdad tiene esa asignación, en vez de confiar solo en lo que dice el token.
+- **Contraseñas cifradas con argon2:** nunca se guardan en texto plano, ni siquiera el Director puede leerlas.
 
 ## Estado actual
-Base de datos lista (11 tablas en PostgreSQL con Docker). En construcción: API con autenticación y roles.
+Backend completo y probado de extremo a extremo: autenticación con JWT, roles verificados en el servidor, y las nueve áreas funcionales del MVP (estudiantes, maestros, materias, grupos, asignaciones, asistencia, calificaciones y avisos). En construcción: panel web (React) y app móvil para padres (Flutter).
 
 ## Autor
 Felix Arvizu Angel Gabriel, DSM 4-1, Universidad Tecnológica de Hermosillo (UTH).
