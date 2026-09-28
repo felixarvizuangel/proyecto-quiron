@@ -15,10 +15,11 @@ La idea central: la app no solo muestra números. A futuro le dirá a la familia
 4. [Base de datos](#base-de-datos)
 5. [Stack tecnológico](#stack-tecnológico)
 6. [Estructura del repositorio](#estructura-del-repositorio)
-7. [Roadmap](#roadmap)
-8. [Decisiones de diseño](#decisiones-de-diseño)
-9. [Estado actual](#estado-actual)
-10. [Autor](#autor)
+7. [Cómo levantar la base de datos](#cómo-levantar-la-base-de-datos)
+8. [Roadmap](#roadmap)
+9. [Decisiones de diseño](#decisiones-de-diseño)
+10. [Estado actual](#estado-actual)
+11. [Autor](#autor)
 
 ---
 
@@ -47,15 +48,16 @@ Los permisos se validan en el servidor, no solo en la interfaz.
 - **Vista para padres** con un menú por hijo (Hijo 1, Hijo 2) y sin comparaciones.
 
 ## Base de datos
-Diseño relacional de 10 tablas. Las relaciones de muchos a muchos se resuelven con tablas intermedias.
+Diseño relacional de 11 tablas en PostgreSQL. Las relaciones de muchos a muchos se resuelven con tablas intermedias y los datos de acceso viven en una sola tabla (`Usuarios`).
 
 ![Diagrama entidad-relación](docs/diagrama_er_app_escolar.png)
 
 | Tabla | Propósito |
 |---|---|
-| `Estudiantes` | Datos del alumno y su grupo |
+| `Usuarios` | Correo, contraseña cifrada, rol y estado (activo) de todas las personas |
+| `Estudiantes` | Datos del alumno, su grupo y su código parental |
 | `Padres` | Padres, madres y tutores |
-| `Estudiante_Padre` | Vincula alumnos con sus tutores |
+| `Estudiante_Padre` | Vincula alumnos con sus tutores y guarda la relación (padre, madre o tutor) |
 | `Maestros` | Datos del personal docente |
 | `Materias` | Catálogo de materias |
 | `Grupos` | Grupos y grados |
@@ -63,6 +65,8 @@ Diseño relacional de 10 tablas. Las relaciones de muchos a muchos se resuelven 
 | `Asistencia` | Registro por estudiante, materia y fecha |
 | `Calificaciones` | Nota por estudiante, materia, maestro y parcial |
 | `Avisos` | Comunicados generales o por grupo |
+
+El esquema completo está en [`backend/db/schema.sql`](backend/db/schema.sql).
 
 ## Stack tecnológico
 
@@ -79,18 +83,39 @@ Diseño relacional de 10 tablas. Las relaciones de muchos a muchos se resuelven 
 ## Estructura del repositorio
 ```
 proyecto-quiron/
-├── backend/   API (Node + TypeScript + Express)
-├── web/       Panel de Director y Maestro (React)
-├── mobile/    App para padres (Flutter)
-├── docs/      Diagrama ER y documentación
+├── backend/
+│   └── db/schema.sql   Esquema de la base de datos
+├── web/                Panel de Director y Maestro (React)
+├── mobile/             App para padres (Flutter)
+├── docs/               Diagrama ER y documentación
+├── docker-compose.yml  PostgreSQL en Docker
+├── .env.example        Variables de entorno de ejemplo
 └── README.md
 ```
 
+## Cómo levantar la base de datos
+Requisitos: Docker Desktop.
+
+1. Copia `.env.example` como `.env` y cambia la contraseña.
+2. Levanta PostgreSQL:
+```
+   docker compose up -d
+```
+3. Crea las tablas (PowerShell):
+```
+   Get-Content backend\db\schema.sql -Raw -Encoding UTF8 | docker exec -i quiron-db psql -U quiron_admin -d quiron
+```
+4. Verifica que existan las 11 tablas:
+```
+   docker exec -it quiron-db psql -U quiron_admin -d quiron -c "\dt"
+```
+
 ## Roadmap
-- [x] Diseño de la base de datos (10 tablas) y diagrama ER
+- [x] Diseño de la base de datos (11 tablas) y diagrama ER
 - [x] Definición de roles y matriz de permisos
 - [x] Repositorio y estructura inicial
-- [ ] **Fase 1 (MVP):** base de datos en PostgreSQL, API con autenticación y roles, CRUD de estudiantes y maestros, asistencia, calificaciones, avisos, panel web y app móvil para padres
+- [x] Base de datos en PostgreSQL con Docker (11 tablas)
+- [ ] **Fase 1 (MVP):** API con autenticación y roles, CRUD de estudiantes y maestros, asistencia, calificaciones, avisos, panel web y app móvil para padres
 - [ ] **Fase 1.5:** modo sin conexión (sincronización al volver el internet)
 - [ ] **Fase 2:** orientación vocacional con rol de psicólogo y validación profesional de las sugerencias de carrera
 - [ ] **Fase 3:** estadísticas avanzadas para el Director y notificaciones por nivel de urgencia
@@ -101,9 +126,11 @@ proyecto-quiron/
 - **Sin comparaciones entre estudiantes ni entre hijos:** decisión de producto para evitar presión y burlas.
 - **Datos sensibles protegidos:** las evaluaciones psicológicas (Fase 2) tendrán acceso restringido.
 - **API y permisos propios:** control total de los datos, sin depender de servicios de terceros para lo esencial.
+- **Datos de acceso centralizados:** una sola tabla `Usuarios` (correo, contraseña cifrada, rol, activo) en vez de repetirlos en cada tabla de personas.
+- **Baja lógica:** dar de baja desactiva al usuario (`activo`), no lo borra, para conservar el historial de calificaciones y asistencia.
 
 ## Estado actual
-Fase de diseño completada. En construcción: base de datos y API.
+Base de datos lista (11 tablas en PostgreSQL con Docker). En construcción: API con autenticación y roles.
 
 ## Autor
 Felix Arvizu Angel Gabriel, DSM 4-1, Universidad Tecnológica de Hermosillo (UTH).
