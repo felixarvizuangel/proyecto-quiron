@@ -5,6 +5,7 @@ import { Estudiantes } from './paginas/Estudiantes';
 import { Login } from './paginas/Login';
 import { Maestros } from './paginas/Maestros';
 import { MisGrupos } from './paginas/MisGrupos';
+import { PasarLista } from './paginas/PasarLista';
 import { Pendiente } from './paginas/Pendiente';
 
 // Cada rol solo tiene registradas sus propias rutas. Si un maestro escribe
@@ -34,7 +35,12 @@ function Rutas() {
             <Route path="/asignaciones" element={<Pendiente titulo="Asignaciones" />} />
           </>
         )}
-        {rol === 'maestro' && <Route path="/mis-grupos" element={<MisGrupos />} />}
+        {rol === 'maestro' && (
+          <>
+            <Route path="/mis-grupos" element={<MisGrupos />} />
+            <Route path="/mis-grupos/:idAsignacion/lista" element={<PasarLista />} />
+          </>
+        )}
         <Route path="/avisos" element={<Pendiente titulo="Avisos" />} />
       </Route>
       <Route path="*" element={<Navigate to={inicio} replace />} />
