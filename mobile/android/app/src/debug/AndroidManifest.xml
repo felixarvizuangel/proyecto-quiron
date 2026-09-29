@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permite que la app se conecte a la API durante el desarrollo. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Solo en desarrollo: la API local usa http, sin cifrar. Este archivo solo
+         se usa en las versiones de prueba; en producción la API irá por https. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>
