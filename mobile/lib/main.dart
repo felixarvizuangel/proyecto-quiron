@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'api/api_cliente.dart';
 import 'pantallas/pantalla_hijos.dart';
@@ -10,6 +11,9 @@ final navegador = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Nombres de días y meses en español de México, para las fechas de la app.
+  await initializeDateFormatting('es_MX');
 
   final haySesion = await ApiCliente.instancia.cargarSesion();
 

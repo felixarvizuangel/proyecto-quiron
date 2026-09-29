@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api_cliente.dart';
 import '../modelos/hijo.dart';
+import 'pantalla_hijo.dart';
 import 'pantalla_login.dart';
 import 'pantalla_vincular.dart';
 
@@ -93,9 +94,10 @@ class _PantallaHijosState extends State<PantallaHijos> {
               );
             }
             return ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: hijos.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, i) => _TarjetaHijo(hijo: hijos[i]),
             );
           },
@@ -119,9 +121,8 @@ class _TarjetaHijo extends StatelessWidget {
         title: Text(hijo.nombre),
         subtitle: Text('${hijo.grupo} · Eres su ${hijo.relacion}'),
         trailing: const Icon(Icons.chevron_right),
-        // El detalle de cada hijo llega en el siguiente bloque.
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El detalle de cada hijo llega en el siguiente paso.')),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => PantallaHijo(hijo: hijo)),
         ),
       ),
     );
