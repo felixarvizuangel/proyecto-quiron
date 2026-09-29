@@ -1,7 +1,6 @@
-import type { InputHTMLAttributes, SelectHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 
 // Piezas de formulario con el mismo estilo en todo el panel.
-// Las siguientes pantallas (maestros, asignaciones, avisos) también las usan.
 const CLASE_CAMPO =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200';
 
@@ -29,6 +28,19 @@ export function Selector({ etiqueta, children, ...props }: SelectorProps) {
       <select {...props} className={CLASE_CAMPO}>
         {children}
       </select>
+    </label>
+  );
+}
+
+interface AreaTextoProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  etiqueta: string;
+}
+
+export function AreaTexto({ etiqueta, ...props }: AreaTextoProps) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm font-medium text-slate-700">{etiqueta}</span>
+      <textarea {...props} className={CLASE_CAMPO} />
     </label>
   );
 }

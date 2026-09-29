@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { SesionProvider, useSesion } from './sesion';
 import { Layout } from './componentes/Layout';
 import { Asignaciones } from './paginas/Asignaciones';
+import { Avisos } from './paginas/Avisos';
 import { CapturaCalificaciones } from './paginas/CapturaCalificaciones';
 import { Estudiantes } from './paginas/Estudiantes';
 import { GruposMaterias } from './paginas/GruposMaterias';
@@ -9,7 +10,6 @@ import { Login } from './paginas/Login';
 import { Maestros } from './paginas/Maestros';
 import { MisGrupos } from './paginas/MisGrupos';
 import { PasarLista } from './paginas/PasarLista';
-import { Pendiente } from './paginas/Pendiente';
 
 // Cada rol solo tiene registradas sus propias rutas. Si un maestro escribe
 // /estudiantes en la barra, esa ruta no existe para él y lo regresa a su inicio.
@@ -45,7 +45,7 @@ function Rutas() {
             <Route path="/mis-grupos/:idAsignacion/calificaciones" element={<CapturaCalificaciones />} />
           </>
         )}
-        <Route path="/avisos" element={<Pendiente titulo="Avisos" />} />
+        <Route path="/avisos" element={<Avisos />} />
       </Route>
       <Route path="*" element={<Navigate to={inicio} replace />} />
     </Routes>
