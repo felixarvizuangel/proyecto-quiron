@@ -1,6 +1,9 @@
 // Todas las llamadas a la API pasan por aquí: agrega el token
 // y convierte los errores del servidor en mensajes legibles.
-const BASE = '/api';
+
+// En desarrollo, '/api' pasa por el proxy de Vite. Al publicar, VITE_API_URL trae
+// la dirección de la API (https://…), y Vite la escribe en el panel al compilarlo.
+const BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 interface Opciones {
   metodo?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

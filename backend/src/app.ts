@@ -1,4 +1,6 @@
+import cors from 'cors';
 import express from 'express';
+import { config } from './config';
 import { pool } from './db';
 import { authRouter } from './auth/router';
 import { estudiantesRouter } from './estudiantes/router';
@@ -12,6 +14,17 @@ import { avisosRouter } from './avisos/router';
 import { familiaRouter } from './familia/router';
 
 export const app = express();
+
+// Detrás de un proxy (Render), req.ip sería la dirección del proxy para todos.
+// Con el número exacto de proxies, req.ip es la del visitante real, y el límite
+// de intentos cuenta a cada persona por separado.
+app.set('trust proxy', config.proxiesConfiables);
+
+// Solo el panel publicado puede llamar a la API desde un navegador.
+// La app móvil no pasa por esta regla: CORS es una protección de los navegadores.
+if (config.origenesPermitidos.length > 0) {
+  app.use(cors({ origin: config.origenesPermitidos }));
+}
 
 // Convierte el cuerpo JSON de cada petición en un objeto. Va antes de las rutas.
 app.use(express.json());

@@ -9,7 +9,7 @@ on:
 
 jobs:
   api:
-    name: API · pruebas con PostgreSQL
+    name: API · compilación y pruebas con PostgreSQL
     runs-on: ubuntu-latest
 
     # PostgreSQL de usar y tirar: existe solo mientras corren las pruebas.
@@ -50,6 +50,8 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      # tsc revisa los tipos y genera la versión que se publica en Render.
+      - run: npm run build
       - run: npm test
 
   web:
