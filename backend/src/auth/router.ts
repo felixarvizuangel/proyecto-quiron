@@ -3,16 +3,17 @@ import { z } from 'zod';
 import { pool } from '../db';
 import { cifrarPassword, verificarPassword } from './password';
 import { generarToken } from './jwt';
+import { limiteLogin } from './limites';
 
 export const authRouter = Router();
 
 // Solo las familias se registran por su cuenta. Director, maestros y
 // estudiantes los da de alta el Director desde sus propias rutas.
 const esquemaRegistro = z.object({
-  correo: z.string().email(),
+  correo: z.string().email('Correo inválido'),
   password: z.string().min(8, 'La contraseña necesita al menos 8 caracteres'),
-  nombre: z.string().min(1),
-  telefono: z.string().optional(),
+  nombre: z.string().trim().min(1, 'Falta el nombre'),
+  telefono: z.string().trim().optional(),
 });
 
 authRouter.post('/registro', async (req, res) => {
@@ -32,7 +33,7 @@ authRouter.post('/registro', async (req, res) => {
     );
     const padre = await cliente.query(
       `INSERT INTO padres (id_usuario, nombre, telefono) VALUES ($1, $2, $3) RETURNING id, nombre`,
-      [usuario.rows[0].id, nombre, telefono ?? null],
+      [usuario.rows[0].id, nombre, telefono || null],
     );
     await cliente.query('COMMIT');
     res.status(201).json({ ...padre.rows[0], correo, rol: 'padre' });
@@ -53,7 +54,9 @@ const esquemaLogin = z.object({
   password: z.string(),
 });
 
-authRouter.post('/login', async (req, res) => {
+// limiteLogin va antes: después de 10 intentos fallidos, la API ni siquiera
+// revisa la contraseña y pide esperar.
+authRouter.post('/login', limiteLogin, async (req, res) => {
   const datos = esquemaLogin.safeParse(req.body);
   if (!datos.success) {
     return res.status(400).json({ error: 'Correo o contraseña con formato inválido' });
