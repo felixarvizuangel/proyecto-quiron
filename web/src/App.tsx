@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { SesionProvider, useSesion } from './sesion';
 import { Layout } from './componentes/Layout';
+import { Asignaciones } from './paginas/Asignaciones';
 import { CapturaCalificaciones } from './paginas/CapturaCalificaciones';
 import { Estudiantes } from './paginas/Estudiantes';
+import { GruposMaterias } from './paginas/GruposMaterias';
 import { Login } from './paginas/Login';
 import { Maestros } from './paginas/Maestros';
 import { MisGrupos } from './paginas/MisGrupos';
@@ -32,8 +34,8 @@ function Rutas() {
           <>
             <Route path="/estudiantes" element={<Estudiantes />} />
             <Route path="/maestros" element={<Maestros />} />
-            <Route path="/grupos-materias" element={<Pendiente titulo="Grupos y materias" />} />
-            <Route path="/asignaciones" element={<Pendiente titulo="Asignaciones" />} />
+            <Route path="/grupos-materias" element={<GruposMaterias />} />
+            <Route path="/asignaciones" element={<Asignaciones />} />
           </>
         )}
         {rol === 'maestro' && (
