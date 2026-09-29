@@ -33,12 +33,20 @@ export function MisGrupos() {
               <p className="text-sm text-slate-500">{a.grupo}</p>
               <h2 className="text-lg font-medium text-slate-800">{a.materia}</h2>
             </div>
-            <Link
-              to={`/mis-grupos/${a.id}/lista`}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              Pasar lista
-            </Link>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                to={`/mis-grupos/${a.id}/lista`}
+                className="rounded-lg bg-indigo-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Pasar lista
+              </Link>
+              <Link
+                to={`/mis-grupos/${a.id}/calificaciones`}
+                className="rounded-lg border border-indigo-200 px-3 py-2 text-center text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+              >
+                Calificaciones
+              </Link>
+            </div>
           </article>
         ))}
       </div>

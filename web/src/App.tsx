@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { SesionProvider, useSesion } from './sesion';
 import { Layout } from './componentes/Layout';
+import { CapturaCalificaciones } from './paginas/CapturaCalificaciones';
 import { Estudiantes } from './paginas/Estudiantes';
 import { Login } from './paginas/Login';
 import { Maestros } from './paginas/Maestros';
@@ -39,6 +40,7 @@ function Rutas() {
           <>
             <Route path="/mis-grupos" element={<MisGrupos />} />
             <Route path="/mis-grupos/:idAsignacion/lista" element={<PasarLista />} />
+            <Route path="/mis-grupos/:idAsignacion/calificaciones" element={<CapturaCalificaciones />} />
           </>
         )}
         <Route path="/avisos" element={<Pendiente titulo="Avisos" />} />
