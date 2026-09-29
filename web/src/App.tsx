@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { SesionProvider, useSesion } from './sesion';
 import { Layout } from './componentes/Layout';
+import { Estudiantes } from './paginas/Estudiantes';
 import { Login } from './paginas/Login';
 import { Maestros } from './paginas/Maestros';
 import { MisGrupos } from './paginas/MisGrupos';
@@ -27,7 +28,7 @@ function Rutas() {
       <Route element={<Layout />}>
         {rol === 'director' && (
           <>
-            <Route path="/estudiantes" element={<Pendiente titulo="Estudiantes" />} />
+            <Route path="/estudiantes" element={<Estudiantes />} />
             <Route path="/maestros" element={<Maestros />} />
             <Route path="/grupos-materias" element={<Pendiente titulo="Grupos y materias" />} />
             <Route path="/asignaciones" element={<Pendiente titulo="Asignaciones" />} />
