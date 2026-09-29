@@ -3,7 +3,7 @@
 const BASE = '/api';
 
 interface Opciones {
-  metodo?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  metodo?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   cuerpo?: unknown;
 }
 
@@ -19,8 +19,8 @@ export async function api<T>(ruta: string, { metodo = 'GET', cuerpo }: Opciones 
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
 
-  // Si mandamos un token y la API lo rechaza, venció o es inválido:
-  // se avisa a toda la app para que cierre la sesión.
+  // Si mandamos un token y la API lo rechaza (venció, es inválido o la cuenta
+  // se dio de baja), se avisa a toda la app para que cierre la sesión.
   if (respuesta.status === 401 && token) {
     window.dispatchEvent(new Event('sesion-expirada'));
   }

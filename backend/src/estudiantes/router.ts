@@ -15,15 +15,18 @@ function generarCodigoParental() {
   return Array.from({ length: 8 }, () => ALFABETO[randomInt(ALFABETO.length)]).join('');
 }
 
-// Lista para el Director: solo estudiantes activos, con su grupo y su correo de acceso.
-estudiantesRouter.get('/', requiereAutenticacion, requiereRol('director'), async (_req, res) => {
+// Lista para el Director, con su grupo y su correo de acceso.
+// Por defecto solo los activos; con ?bajas=1 incluye también a los dados de baja.
+estudiantesRouter.get('/', requiereAutenticacion, requiereRol('director'), async (req, res) => {
+  const incluirBajas = req.query.bajas === '1';
   const resultado = await pool.query(
-    `SELECT e.id, e.nombre, e.matricula, e.codigo_parental, g.nombre AS grupo, u.correo
+    `SELECT e.id, e.nombre, e.matricula, e.codigo_parental, g.nombre AS grupo, u.correo, u.activo
      FROM estudiantes e
      JOIN grupos g ON g.id = e.id_grupo
      JOIN usuarios u ON u.id = e.id_usuario
-     WHERE u.activo
-     ORDER BY g.nombre, e.nombre`,
+     WHERE u.activo OR $1
+     ORDER BY u.activo DESC, g.nombre, e.nombre`,
+    [incluirBajas],
   );
   res.json(resultado.rows);
 });
@@ -83,4 +86,28 @@ estudiantesRouter.post('/', requiereAutenticacion, requiereRol('director'), asyn
   } finally {
     cliente.release();
   }
+});
+
+const esquemaEstado = z.object({ activo: z.boolean() });
+
+// Dar de baja o reactivar. No borra nada: solo cambia "activo" en su cuenta,
+// así que su historial de asistencia y calificaciones se conserva.
+estudiantesRouter.patch('/:id/estado', requiereAutenticacion, requiereRol('director'), async (req, res) => {
+  const id = Number(req.params.id);
+  const datos = esquemaEstado.safeParse(req.body);
+  if (!Number.isInteger(id) || id <= 0 || !datos.success) {
+    return res.status(400).json({ error: 'Datos inválidos' });
+  }
+
+  const resultado = await pool.query(
+    `UPDATE usuarios u SET activo = $2
+     FROM estudiantes e
+     WHERE e.id = $1 AND u.id = e.id_usuario
+     RETURNING e.id, u.activo`,
+    [id, datos.data.activo],
+  );
+  if (!resultado.rowCount) {
+    return res.status(404).json({ error: 'Ese estudiante no existe' });
+  }
+  res.json(resultado.rows[0]);
 });
