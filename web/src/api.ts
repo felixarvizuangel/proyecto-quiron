@@ -19,6 +19,12 @@ export async function api<T>(ruta: string, { metodo = 'GET', cuerpo }: Opciones 
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
 
+  // Si mandamos un token y la API lo rechaza, venció o es inválido:
+  // se avisa a toda la app para que cierre la sesión.
+  if (respuesta.status === 401 && token) {
+    window.dispatchEvent(new Event('sesion-expirada'));
+  }
+
   const datos = await respuesta.json().catch(() => ({}));
   if (!respuesta.ok) {
     throw new Error(datos.error ?? 'No se pudo conectar con el servidor');
