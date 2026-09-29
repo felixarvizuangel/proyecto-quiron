@@ -1,0 +1,86 @@
+# Integración continua: en cada push y pull request a main, GitHub revisa las tres partes.
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  api:
+    name: API · pruebas con PostgreSQL
+    runs-on: ubuntu-latest
+
+    # PostgreSQL de usar y tirar: existe solo mientras corren las pruebas.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: quiron_admin
+          POSTGRES_PASSWORD: solo-para-ci
+          POSTGRES_DB: quiron
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quiron_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Las mismas variables de tu .env. No son secretos reales: la base
+    # y la API solo existen dentro de esta ejecución.
+    env:
+      POSTGRES_USER: quiron_admin
+      POSTGRES_PASSWORD: solo-para-ci
+      POSTGRES_DB: quiron
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      JWT_SECRET: secreto-solo-para-ci
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  web:
+    name: Panel web · compilación
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # tsc revisa los tipos de todo el panel y vite arma la versión final.
+      - run: npm run build
+
+  mobile:
+    name: App · análisis de Flutter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Los avisos "info" no detienen la revisión; los errores y advertencias sí.
+      - run: flutter analyze --no-fatal-infos
