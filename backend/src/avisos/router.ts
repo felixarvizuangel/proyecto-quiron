@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../db';
 import { requiereAutenticacion, requiereRol } from '../auth/middleware';
+import { asignacionDelMaestro, puedeVerEstudiante } from '../auth/permisos';
 
 export const avisosRouter = Router();
 
-const esquemaAvisoDirector = z.object({
+const esquemaAviso = z.object({
   titulo: z.string().min(1),
   subtitulo: z.string().optional(),
   cuerpo: z.string().min(1),
@@ -15,7 +16,7 @@ const esquemaAvisoDirector = z.object({
 // El Director publica avisos generales: llegan a toda la escuela,
 // por eso id_materia_maestro_grupo se deja vacío (NULL).
 avisosRouter.post('/general', requiereAutenticacion, requiereRol('director'), async (req, res) => {
-  const datos = esquemaAvisoDirector.safeParse(req.body);
+  const datos = esquemaAviso.safeParse(req.body);
   if (!datos.success) {
     return res.status(400).json({ error: datos.error.issues[0].message });
   }
@@ -30,26 +31,20 @@ avisosRouter.post('/general', requiereAutenticacion, requiereRol('director'), as
   res.status(201).json(resultado.rows[0]);
 });
 
-const esquemaAvisoMaestro = esquemaAvisoDirector.extend({
+const esquemaAvisoDeGrupo = esquemaAviso.extend({
   idAsignacion: z.number().int().positive(), // el id de materia_maestro_grupo, de /asignaciones/mias
 });
 
-// El maestro publica un aviso solo para su propio grupo y materia.
-// Se verifica que esa asignación de verdad le pertenezca, igual que en asistencia.
+// El maestro publica un aviso solo para una asignación que de verdad le pertenece.
 avisosRouter.post('/grupo', requiereAutenticacion, requiereRol('maestro'), async (req, res) => {
-  const datos = esquemaAvisoMaestro.safeParse(req.body);
+  const datos = esquemaAvisoDeGrupo.safeParse(req.body);
   if (!datos.success) {
     return res.status(400).json({ error: datos.error.issues[0].message });
   }
   const { idAsignacion, titulo, subtitulo, cuerpo, fechaEvento } = datos.data;
 
-  const propia = await pool.query(
-    `SELECT 1 FROM materia_maestro_grupo mmg
-     JOIN maestros ma ON ma.id = mmg.id_maestro
-     WHERE mmg.id = $1 AND ma.id_usuario = $2`,
-    [idAsignacion, req.usuario!.idUsuario],
-  );
-  if (!propia.rowCount) {
+  const asignacion = await asignacionDelMaestro(idAsignacion, req.usuario!.idUsuario);
+  if (!asignacion) {
     return res.status(403).json({ error: 'Esa asignación no te pertenece' });
   }
 
@@ -66,19 +61,11 @@ avisosRouter.post('/grupo', requiereAutenticacion, requiereRol('maestro'), async
 // más los de las materias que cursa (por su grupo).
 avisosRouter.get('/estudiante/:id', requiereAutenticacion, async (req, res) => {
   const idEstudiante = Number(req.params.id);
-  const { rol, idUsuario } = req.usuario!;
-
-  if (rol === 'estudiante') {
-    const propio = await pool.query('SELECT 1 FROM estudiantes WHERE id = $1 AND id_usuario = $2', [idEstudiante, idUsuario]);
-    if (!propio.rowCount) return res.status(403).json({ error: 'No puedes ver los avisos de otro estudiante' });
-  } else if (rol === 'padre') {
-    const vinculado = await pool.query(
-      `SELECT 1 FROM estudiante_padre ep
-       JOIN padres p ON p.id = ep.id_padre
-       WHERE ep.id_estudiante = $1 AND p.id_usuario = $2`,
-      [idEstudiante, idUsuario],
-    );
-    if (!vinculado.rowCount) return res.status(403).json({ error: 'Ese estudiante no está vinculado a tu cuenta' });
+  if (!Number.isInteger(idEstudiante) || idEstudiante <= 0) {
+    return res.status(400).json({ error: 'Estudiante inválido' });
+  }
+  if (!(await puedeVerEstudiante(req.usuario!, idEstudiante))) {
+    return res.status(403).json({ error: 'No tienes acceso a la información de este estudiante' });
   }
 
   const resultado = await pool.query(

@@ -3,38 +3,9 @@ import { z } from 'zod';
 import { pool } from '../db';
 import { config } from '../config';
 import { requiereAutenticacion, requiereRol } from '../auth/middleware';
+import { asignacionDelMaestro, maestroDeLaMateria, puedeVerEstudiante } from '../auth/permisos';
 
 export const calificacionesRouter = Router();
-
-// Devuelve la asignación solo si pertenece al maestro que hace la petición.
-// (Es la misma regla que en asistencia; más adelante las juntaremos en un solo archivo.)
-async function asignacionDelMaestro(idAsignacion: number, idUsuario: number) {
-  const resultado = await pool.query(
-    `SELECT mmg.id_grupo, mmg.id_materia, mmg.id_maestro, m.nombre AS materia, g.nombre AS grupo
-     FROM materia_maestro_grupo mmg
-     JOIN maestros ma ON ma.id = mmg.id_maestro
-     JOIN materias m ON m.id = mmg.id_materia
-     JOIN grupos g ON g.id = mmg.id_grupo
-     WHERE mmg.id = $1 AND ma.id_usuario = $2`,
-    [idAsignacion, idUsuario],
-  );
-  return resultado.rows[0] as
-    | { id_grupo: number; id_materia: number; id_maestro: number; materia: string; grupo: string }
-    | undefined;
-}
-
-// Para un solo registro: devuelve el id del maestro si da esta materia al grupo del estudiante.
-async function maestroPuedeOperar(idUsuarioMaestro: number, idEstudiante: number, idMateria: number) {
-  const resultado = await pool.query(
-    `SELECT ma.id AS id_maestro
-     FROM materia_maestro_grupo mmg
-     JOIN maestros ma ON ma.id = mmg.id_maestro
-     JOIN estudiantes e ON e.id_grupo = mmg.id_grupo
-     WHERE ma.id_usuario = $1 AND mmg.id_materia = $2 AND e.id = $3`,
-    [idUsuarioMaestro, idMateria, idEstudiante],
-  );
-  return resultado.rows[0]?.id_maestro as number | undefined;
-}
 
 // ---------- Captura por grupo (lo usa el panel) ----------
 
@@ -154,7 +125,7 @@ calificacionesRouter.post('/', requiereAutenticacion, requiereRol('maestro'), as
   }
   const { idEstudiante, idMateria, calificacion, parcial } = datos.data;
 
-  const idMaestro = await maestroPuedeOperar(req.usuario!.idUsuario, idEstudiante, idMateria);
+  const idMaestro = await maestroDeLaMateria(req.usuario!.idUsuario, idEstudiante, idMateria);
   if (!idMaestro) {
     return res.status(403).json({ error: 'No impartes esta materia a este estudiante' });
   }
@@ -177,31 +148,16 @@ calificacionesRouter.post('/', requiereAutenticacion, requiereRol('maestro'), as
   }
 });
 
-// ---------- Consulta por estudiante (estudiante propio, su familia, Director o maestro) ----------
+// ---------- Consulta por estudiante ----------
 
 // El aprobado/reprobado se calcula al leer con la mínima del .env; nunca se guarda.
 calificacionesRouter.get('/estudiante/:id', requiereAutenticacion, async (req, res) => {
   const idEstudiante = Number(req.params.id);
-  const { rol, idUsuario } = req.usuario!;
-
-  if (rol === 'estudiante') {
-    const propio = await pool.query('SELECT 1 FROM estudiantes WHERE id = $1 AND id_usuario = $2', [
-      idEstudiante,
-      idUsuario,
-    ]);
-    if (!propio.rowCount) {
-      return res.status(403).json({ error: 'No puedes ver las calificaciones de otro estudiante' });
-    }
-  } else if (rol === 'padre') {
-    const vinculado = await pool.query(
-      `SELECT 1 FROM estudiante_padre ep
-       JOIN padres p ON p.id = ep.id_padre
-       WHERE ep.id_estudiante = $1 AND p.id_usuario = $2`,
-      [idEstudiante, idUsuario],
-    );
-    if (!vinculado.rowCount) {
-      return res.status(403).json({ error: 'Ese estudiante no está vinculado a tu cuenta' });
-    }
+  if (!Number.isInteger(idEstudiante) || idEstudiante <= 0) {
+    return res.status(400).json({ error: 'Estudiante inválido' });
+  }
+  if (!(await puedeVerEstudiante(req.usuario!, idEstudiante))) {
+    return res.status(403).json({ error: 'No tienes acceso a la información de este estudiante' });
   }
 
   const resultado = await pool.query(

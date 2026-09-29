@@ -2,42 +2,13 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../db';
 import { requiereAutenticacion, requiereRol } from '../auth/middleware';
+import { asignacionDelMaestro, maestroDeLaMateria, puedeVerEstudiante } from '../auth/permisos';
 
 export const asistenciaRouter = Router();
-
-// Devuelve la asignación (grupo y materia) solo si pertenece al maestro que hace
-// la petición. Es la regla "un maestro solo toca lo que le corresponde".
-async function asignacionDelMaestro(idAsignacion: number, idUsuario: number) {
-  const resultado = await pool.query(
-    `SELECT mmg.id_grupo, mmg.id_materia, m.nombre AS materia, g.nombre AS grupo
-     FROM materia_maestro_grupo mmg
-     JOIN maestros ma ON ma.id = mmg.id_maestro
-     JOIN materias m ON m.id = mmg.id_materia
-     JOIN grupos g ON g.id = mmg.id_grupo
-     WHERE mmg.id = $1 AND ma.id_usuario = $2`,
-    [idAsignacion, idUsuario],
-  );
-  return resultado.rows[0] as
-    | { id_grupo: number; id_materia: number; materia: string; grupo: string }
-    | undefined;
-}
 
 // Fecha de hoy en la zona horaria del servidor, en formato AAAA-MM-DD.
 function hoy() {
   return new Date().toLocaleDateString('en-CA');
-}
-
-// Para un solo registro: ¿el maestro da esta materia al grupo de este estudiante?
-async function maestroPuedeOperar(idUsuarioMaestro: number, idEstudiante: number, idMateria: number) {
-  const resultado = await pool.query(
-    `SELECT 1
-     FROM materia_maestro_grupo mmg
-     JOIN maestros ma ON ma.id = mmg.id_maestro
-     JOIN estudiantes e ON e.id_grupo = mmg.id_grupo
-     WHERE ma.id_usuario = $1 AND mmg.id_materia = $2 AND e.id = $3`,
-    [idUsuarioMaestro, idMateria, idEstudiante],
-  );
-  return (resultado.rowCount ?? 0) > 0;
 }
 
 // ---------- Pasar lista a todo un grupo (lo usa el panel) ----------
@@ -155,8 +126,8 @@ asistenciaRouter.post('/', requiereAutenticacion, requiereRol('maestro'), async 
   }
   const { idEstudiante, idMateria, fecha, estado, justificacion } = datos.data;
 
-  const autorizado = await maestroPuedeOperar(req.usuario!.idUsuario, idEstudiante, idMateria);
-  if (!autorizado) {
+  const idMaestro = await maestroDeLaMateria(req.usuario!.idUsuario, idEstudiante, idMateria);
+  if (!idMaestro) {
     return res.status(403).json({ error: 'No impartes esta materia a este estudiante' });
   }
 
@@ -178,31 +149,15 @@ asistenciaRouter.post('/', requiereAutenticacion, requiereRol('maestro'), async 
   }
 });
 
-// ---------- Consulta por estudiante (estudiante propio, su familia, Director o maestro) ----------
+// ---------- Consulta por estudiante ----------
 
 asistenciaRouter.get('/estudiante/:id', requiereAutenticacion, async (req, res) => {
   const idEstudiante = Number(req.params.id);
-  const { rol, idUsuario } = req.usuario!;
-
-  // Un estudiante solo puede pedir la suya. Una familia, solo la de sus hijos vinculados.
-  if (rol === 'estudiante') {
-    const propio = await pool.query('SELECT 1 FROM estudiantes WHERE id = $1 AND id_usuario = $2', [
-      idEstudiante,
-      idUsuario,
-    ]);
-    if (!propio.rowCount) {
-      return res.status(403).json({ error: 'No puedes ver la asistencia de otro estudiante' });
-    }
-  } else if (rol === 'padre') {
-    const vinculado = await pool.query(
-      `SELECT 1 FROM estudiante_padre ep
-       JOIN padres p ON p.id = ep.id_padre
-       WHERE ep.id_estudiante = $1 AND p.id_usuario = $2`,
-      [idEstudiante, idUsuario],
-    );
-    if (!vinculado.rowCount) {
-      return res.status(403).json({ error: 'Ese estudiante no está vinculado a tu cuenta' });
-    }
+  if (!Number.isInteger(idEstudiante) || idEstudiante <= 0) {
+    return res.status(400).json({ error: 'Estudiante inválido' });
+  }
+  if (!(await puedeVerEstudiante(req.usuario!, idEstudiante))) {
+    return res.status(403).json({ error: 'No tienes acceso a la información de este estudiante' });
   }
 
   const resultado = await pool.query(
