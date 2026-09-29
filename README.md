@@ -42,12 +42,13 @@ En muchas escuelas la información del estudiante (asistencia, calificaciones, a
 | Ver calificaciones y asistencia | Sí (todos) | Sí (solo su grupo) | Solo las propias | Solo las de sus hijos |
 | Comparar entre estudiantes o hijos | No aplica | No aplica | No | No (decisión de producto) |
 
-Los permisos se validan en el servidor, no solo en la interfaz: cada ruta de escritura confirma en la base de datos que el maestro autenticado de verdad imparte esa materia a ese grupo antes de guardar cualquier cosa.
+Los permisos se validan en el servidor, no solo en la interfaz. Las reglas de acceso viven en un solo módulo (`backend/src/auth/permisos.ts`), y cualquier rol sin una regla definida no ve nada.
 
 ## Funciones principales
 - **Pase de lista por grupo:** presente, retardo o ausente, con justificación opcional. Se puede corregir un día anterior.
 - **Calificaciones por parcial.** El estado aprobado/reprobado se calcula al consultar, no se guarda.
-- **Avisos** por grupo y materia, o generales de toda la escuela (la API ya funciona; la pantalla del panel está en construcción).
+- **Avisos** generales del Director, o por grupo y materia de cada maestro, con fecha de evento opcional.
+- **Altas y bajas:** el Director da de alta a estudiantes y maestros, y puede darlos de baja o reactivarlos sin perder su historial. La baja surte efecto al instante.
 - **Código familiar:** cada estudiante recibe un código que su familia usará para vincularse desde la app (el código ya se genera; la vinculación llega con la app móvil).
 - **App para familias** con un menú por hijo (Hijo 1, Hijo 2) y sin comparaciones (en construcción).
 - **Notificaciones push**, incluyendo alertas urgentes con sonido distinto (planeado).
@@ -57,15 +58,17 @@ El panel es solo para el Director y los maestros. Las familias y los estudiantes
 
 | Rol | Pantalla | Qué hace |
 |---|---|---|
-| Director | Estudiantes | Lista de estudiantes activos y alta con código familiar |
-| Director | Maestros | Lista del personal docente |
-| Director | Grupos y materias, Asignaciones | En construcción |
+| Director | Estudiantes | Lista, alta con código familiar, baja y reactivación |
+| Director | Maestros | Lista, alta, baja y reactivación |
+| Director | Grupos y materias | Catálogos de la escuela |
+| Director | Asignaciones | Qué maestro da qué materia a qué grupo: asignar y quitar |
+| Director | Avisos | Todos los avisos; publica avisos para toda la escuela |
 | Maestro | Mis grupos | Materias y grupos que tiene asignados |
 | Maestro | Pasar lista | Todo el grupo en una pantalla, por fecha; todos empiezan como presentes |
 | Maestro | Calificaciones | Captura por parcial, con aprobado/no aprobado mientras se escribe |
-| Ambos | Avisos | En construcción |
+| Maestro | Avisos | Avisos generales y propios; publica en sus grupos |
 
-Cada rol solo tiene registradas sus propias pantallas, y la sesión se cierra sola cuando el token vence.
+Cada rol solo tiene registradas sus propias pantallas, y la sesión se cierra sola si el token vence o si la cuenta se da de baja.
 
 ## Base de datos
 Diseño relacional de 11 tablas en PostgreSQL. Las relaciones de muchos a muchos se resuelven con tablas intermedias y los datos de acceso viven en una sola tabla (`Usuarios`).
@@ -108,15 +111,15 @@ proyecto-quiron/
 ├── backend/
 │   ├── db/schema.sql         Esquema de la base de datos
 │   └── src/
-│       ├── auth/             Registro de familias, login, JWT y permisos
-│       ├── estudiantes/      Lista y alta de estudiantes
-│       ├── maestros/         Lista y alta de maestros
+│       ├── auth/             Registro de familias, login, JWT, middleware y reglas de acceso
+│       ├── estudiantes/      Lista, alta, baja y reactivación de estudiantes
+│       ├── maestros/         Lista, alta, baja y reactivación de maestros
 │       ├── materias/         Catálogo de materias
 │       ├── grupos/           Catálogo de grupos
 │       ├── asignaciones/     Qué maestro da qué materia a qué grupo
 │       ├── asistencia/       Pase de lista por grupo y consultas
 │       ├── calificaciones/   Captura por parcial y consultas
-│       ├── avisos/           Avisos generales y por grupo
+│       ├── avisos/           Publicación, consulta y borrado de avisos
 │       ├── scripts/          Creación de la cuenta del Director
 │       ├── app.ts            Rutas de la API
 │       ├── config.ts         Lectura y validación del .env
@@ -125,7 +128,7 @@ proyecto-quiron/
 ├── web/
 │   └── src/
 │       ├── componentes/      Menú lateral y piezas de formulario
-│       ├── paginas/          Login, Estudiantes, Maestros, Mis grupos, Pasar lista, Calificaciones
+│       ├── paginas/          Una pantalla por archivo (login, estudiantes, avisos, etc.)
 │       ├── api.ts            Todas las llamadas a la API
 │       ├── sesion.tsx        Sesión y rol del usuario
 │       ├── useApi.ts         Carga de datos con estado de carga y error
@@ -202,32 +205,38 @@ Importante: **la escala se elige al instalar y no se cambia a mitad de ciclo**, 
 Si Quirón llegara a atender varias escuelas con escalas distintas, la escala y la mínima se guardarían por escuela en una tabla, junto con el `id_escuela` descrito en [Consideraciones de escalabilidad](#consideraciones-de-escalabilidad).
 
 ## API
-Todas las rutas, salvo `/salud`, `/auth/registro` y `/auth/login`, requieren el token en el encabezado `Authorization: Bearer <token>`.
+Todas las rutas, salvo `/salud`, `/auth/registro` y `/auth/login`, requieren el token en el encabezado `Authorization: Bearer <token>`. Si la cuenta se da de baja, sus peticiones responden `401` aunque el token no haya vencido.
 
 | Método | Ruta | Quién puede | Qué hace |
 |---|---|---|---|
 | GET | `/salud` | Cualquiera | Confirma que la API responde y llega a la base |
 | POST | `/auth/registro` | Cualquiera | Registro de familias (siempre con rol de padre) |
 | POST | `/auth/login` | Cualquiera | Devuelve un token JWT y el rol |
-| GET | `/estudiantes` | Director | Lista de estudiantes activos |
+| GET | `/estudiantes` | Director | Estudiantes activos (con `?bajas=1`, también los dados de baja) |
 | POST | `/estudiantes` | Director | Alta de estudiante con código familiar |
-| GET | `/maestros` | Cualquier usuario autenticado | Lista de maestros |
+| PATCH | `/estudiantes/:id/estado` | Director | Dar de baja o reactivar |
+| GET | `/maestros` | Cualquier usuario autenticado | Lista de maestros (correo y teléfono solo para el Director) |
 | POST | `/maestros` | Director | Alta de maestro |
+| PATCH | `/maestros/:id/estado` | Director | Dar de baja o reactivar |
 | GET | `/materias`, `/grupos` | Cualquier usuario autenticado | Catálogos |
 | POST | `/materias`, `/grupos` | Director | Crea materias o grupos |
+| GET | `/asignaciones` | Director | Todas las asignaciones |
 | POST | `/asignaciones` | Director | Asigna maestro + materia + grupo |
+| DELETE | `/asignaciones/:id` | Director | Quita una asignación (el historial se conserva) |
 | GET | `/asignaciones/mias` | Maestro | Sus asignaciones |
 | GET | `/asistencia/asignacion/:id?fecha=AAAA-MM-DD` | Maestro (solo sus asignaciones) | Lista del grupo con lo ya marcado ese día |
 | POST | `/asistencia/lista` | Maestro (solo sus asignaciones) | Guarda el pase de lista completo en una transacción |
 | POST | `/asistencia` | Maestro | Registro individual |
-| GET | `/asistencia/estudiante/:id` | Estudiante propio, su familia, Director, maestro | Historial de asistencia |
+| GET | `/asistencia/estudiante/:id` | Estudiante propio, su familia, Director, maestros de su grupo | Historial de asistencia |
 | GET | `/calificaciones/asignacion/:id?parcial=N` | Maestro (solo sus asignaciones) | Calificaciones del grupo en ese parcial |
 | POST | `/calificaciones/lista` | Maestro (solo sus asignaciones) | Guarda las calificaciones del grupo en una transacción |
 | POST | `/calificaciones` | Maestro | Registro individual |
-| GET | `/calificaciones/estudiante/:id` | Estudiante propio, su familia, Director, maestro | Calificaciones con aprobado/reprobado calculado |
+| GET | `/calificaciones/estudiante/:id` | Estudiante propio, su familia, Director, maestros de su grupo | Calificaciones con aprobado/reprobado calculado |
+| GET | `/avisos` | Director (todos), Maestro (generales y propios) | Avisos para el panel |
 | POST | `/avisos/general` | Director | Aviso para toda la escuela |
-| POST | `/avisos/grupo` | Maestro | Aviso para su grupo y materia |
-| GET | `/avisos/estudiante/:id` | Estudiante propio, su familia, Director, maestro | Avisos generales y de sus materias |
+| POST | `/avisos/grupo` | Maestro (solo sus asignaciones) | Aviso para su grupo y materia |
+| DELETE | `/avisos/:id` | Director (cualquiera), Maestro (solo los suyos) | Borra un aviso |
+| GET | `/avisos/estudiante/:id` | Estudiante propio, su familia, Director, maestros de su grupo | Avisos generales y de sus materias |
 
 ## Roadmap
 - [x] Diseño de la base de datos (11 tablas) y diagrama ER
@@ -235,13 +244,10 @@ Todas las rutas, salvo `/salud`, `/auth/registro` y `/auth/login`, requieren el 
 - [x] Repositorio y estructura inicial
 - [x] Base de datos en PostgreSQL con Docker
 - [x] **Fase 1 — API:** autenticación, roles, estudiantes, maestros, materias, grupos, asignaciones, asistencia, calificaciones y avisos
-- [ ] **Fase 1 — Panel web:**
-  - [x] Login y menú según el rol
-  - [x] Estudiantes (lista y alta) y lista de maestros
-  - [x] Pase de lista por grupo
-  - [x] Captura de calificaciones por parcial
-  - [ ] Grupos y materias, asignaciones y avisos
-- [ ] **Fase 1 — App móvil para familias (Flutter):** vinculación con el código familiar, asistencia, calificaciones y avisos
+- [x] **Fase 1 — Panel web:** login y menú por rol, estudiantes, maestros, grupos y materias, asignaciones, pase de lista, calificaciones y avisos
+- [ ] **Fase 1 — API para familias:** vinculación con el código familiar y consulta de sus hijos
+- [ ] **Fase 1 — App móvil para familias (Flutter):** asistencia, calificaciones y avisos de cada hijo
+- [ ] **Pulido:** pruebas automatizadas, capturas del sistema y despliegue
 - [ ] **Fase 1.5:** modo sin conexión (sincronización al volver el internet)
 - [ ] **Fase 2:** orientación vocacional con rol de psicólogo y validación profesional de las sugerencias de carrera
 - [ ] **Fase 3:** estadísticas avanzadas para el Director y notificaciones por nivel de urgencia
@@ -254,12 +260,15 @@ Todas las rutas, salvo `/salud`, `/auth/registro` y `/auth/login`, requieren el 
 - **Sin comparaciones entre estudiantes ni entre hijos:** decisión de producto para evitar presión y burlas.
 - **Datos sensibles protegidos:** las evaluaciones psicológicas (Fase 2) tendrán acceso restringido.
 - **API y permisos propios:** control total de los datos, sin depender de servicios de terceros para lo esencial.
-- **Datos de acceso centralizados:** una sola tabla `Usuarios` (correo, contraseña cifrada, rol, activo) en vez de repetirlos en cada tabla de personas.
-- **Baja lógica:** dar de baja desactiva al usuario (`activo`), no lo borra, para conservar el historial de calificaciones y asistencia.
-- **Registro abierto solo para familias:** el Director da de alta al personal y a los estudiantes, y nadie puede registrarse como director desde la API. La primera cuenta de Director se crea con un script desde el servidor.
+- **Reglas de acceso en un solo módulo, y negar por defecto:** si cambia quién puede ver qué, se cambia en un lugar; un rol sin regla definida no ve nada.
 - **Permisos verificados en el servidor:** cada ruta de escritura vuelve a consultar la base de datos para confirmar que el maestro de verdad tiene esa asignación, en vez de confiar solo en lo que dice el token.
+- **Datos de acceso centralizados:** una sola tabla `Usuarios` (correo, contraseña cifrada, rol, activo) en vez de repetirlos en cada tabla de personas.
+- **Baja lógica con efecto inmediato:** dar de baja desactiva la cuenta sin borrarla, y el servidor revisa en cada petición que siga activa, así que no hay que esperar a que venza el token.
+- **Registro abierto solo para familias:** el Director da de alta al personal y a los estudiantes, y nadie puede registrarse como director desde la API. La primera cuenta de Director se crea con un script desde el servidor.
 - **Pase de lista y calificaciones en una sola transacción:** se guarda el grupo completo o nada, y el servidor confirma que cada estudiante pertenezca a ese grupo.
 - **Todos empiezan como presentes:** en el pase de lista el maestro solo marca las excepciones.
+- **Quitar una asignación conserva el historial:** la asistencia y las calificaciones no dependen de la asignación, y si ya tiene avisos publicados la base de datos impide borrarla.
+- **Datos mínimos:** quien no es Director solo recibe el nombre de los maestros, no su teléfono ni su correo.
 - **Código familiar impredecible y fácil de dictar:** se genera con el generador seguro de Node y sin caracteres que se confunden (0 y O, 1 e I).
 - **Contraseñas cifradas con argon2:** nunca se guardan en texto plano, ni siquiera el Director puede leerlas.
 - **Sesión del panel por pestaña:** se borra al cerrar la pestaña, pensando en computadoras compartidas de la escuela.
@@ -279,19 +288,21 @@ Puntos que quedan fuera del alcance del MVP, pero con una solución identificada
 |---|---|---|
 | Un solo servidor de PostgreSQL, sin réplicas | Miles de usuarios simultáneos | Réplicas de lectura o un servicio gestionado (RDS, Cloud SQL) |
 | Sin caché | Consultas muy frecuentes sobre datos que casi no cambian | Redis para catálogos como materias o grupos |
+| Revisión de cuenta activa en cada petición | Miles de peticiones por segundo | Guardar el estado de las cuentas en caché por unos segundos |
 | Corre en una sola computadora | Uso en producción real | Desplegar en un servicio con más de una instancia (Railway, Render, un VPS) |
 | Pensado para una sola escuela | Vender el sistema a varias instituciones | Agregar `id_escuela` a las tablas y a los permisos |
 | Una sola escala de calificaciones por instalación | Atender escuelas con escalas distintas | Guardar la escala y la mínima por escuela, junto con `id_escuela` |
 | Avisos masivos enviados en la misma petición | Un aviso a cientos de padres a la vez | Cola de trabajo (por ejemplo BullMQ) para las notificaciones push |
 
 ## Estado actual
-La API está completa y probada. El panel web ya permite al Director gestionar estudiantes y consultar maestros, y al maestro pasar lista y capturar calificaciones de sus grupos. En construcción: el resto del panel (grupos y materias, asignaciones y avisos) y la app móvil para familias.
+La API y el panel web están completos y probados. El Director administra estudiantes, maestros, grupos, materias, asignaciones y avisos; el maestro pasa lista, captura calificaciones y publica avisos de sus grupos. En construcción: la API para familias y la app móvil.
 
 ### Pendientes conocidos
-- **Dar de baja:** el campo `activo` ya existe, pero todavía no hay una ruta para desactivar usuarios.
-- **Consultas por estudiante:** `/asistencia/estudiante/:id`, `/calificaciones/estudiante/:id` y `/avisos/estudiante/:id` aún permiten que cualquier maestro consulte a cualquier estudiante. Deben limitarse a los grupos que imparte.
-- **Regla repetida:** la verificación de que un maestro tiene una asignación está repetida en asistencia y calificaciones; se moverá a un solo archivo.
-- **Vinculación de familias:** el código familiar ya se genera, pero la ruta para que una familia se vincule llega con la app móvil.
+- **Vinculación de familias:** el código familiar ya se genera, pero falta la ruta para que una familia se vincule. Llega con la app móvil.
+- **Ciclos escolares:** el sistema no distingue un ciclo de otro. Si una materia se repite en el ciclo siguiente, las calificaciones nuevas del mismo parcial reemplazarían a las anteriores. Se resuelve agregando una tabla de ciclos y ligando a ella las asignaciones y calificaciones.
+- **Editar datos:** hoy solo hay alta y baja; falta cambiar a un estudiante de grupo o corregir nombres y correos.
+- **Contraseñas:** falta que cada usuario pueda cambiar su contraseña y recuperarla si la olvida.
+- **Pruebas automatizadas:** todo se probó a mano; faltan pruebas que se ejecuten solas.
 
 ## Autor
 Felix Arvizu Angel Gabriel, DSM 4-1, Universidad Tecnológica de Hermosillo (UTH).
